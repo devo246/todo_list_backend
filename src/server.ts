@@ -1,4 +1,4 @@
-// src/server.ts
+// src/app.ts
 import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
@@ -18,7 +18,6 @@ app.use(cookieParser());
 dotenv.config();
 connectDB();
 
-// شغال API علشان لما نفتح رابط السيرفر نعرف ان الـ Health Check
 app.get("/", (req, res) => {
   res.json({ message: "API is running" });
 });
@@ -28,7 +27,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/api", authRouter);
 app.use("/api/tasks", taskRouter);
 
-// الافضل
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
