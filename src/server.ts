@@ -1,22 +1,36 @@
-import express from 'express'
-import dotenv from 'dotenv'
-import connectDB from './config/db'
-import authRouter from './routes/auth.route'
-import taskRouter from './routes/task.route'
 // src/server.ts
-import cors from 'cors'
+import express from "express";
+import dotenv from "dotenv";
+import cookieParser from "cookie-parser";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger";
+import connectDB from "./config/db";
+import authRouter from "./routes/auth.route";
+import taskRouter from "./routes/task.route";
+import cors from "cors";
 
-const app = express()
+const app = express();
 
-app.use(express.json())
+app.use(express.json());
 app.use(cors());
+app.use(cookieParser());
 
-dotenv.config()
-connectDB()
+dotenv.config();
+connectDB();
 
-app.use('/api', authRouter)
-app.use('/api/tasks', taskRouter)
+// شغال API علشان لما نفتح رابط السيرفر نعرف ان الـ Health Check
+app.get("/", (req, res) => {
+  res.json({ message: "API is running" });
+});
 
-app.listen(process.env.PORT!, () => {
-    console.log(`server is work in: http://localhost:${process.env.PORT!}`);
-})
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+app.use("/api", authRouter);
+app.use("/api/tasks", taskRouter);
+
+// الافضل
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`server is work in: http://localhost:${PORT}`);
+});

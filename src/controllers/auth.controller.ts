@@ -3,6 +3,22 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import UserModel from "../models/User";
 
+// auth.controller.ts
+
+// Tokens دالة لانشاء الـ
+const generateTokens = (userId: string) => {
+  // Access Token
+  const accessToken = jwt.sign({ userId }, process.env.ACCESS_JWT_SECRET!, {
+    expiresIn: "15m",
+  });
+
+  // Refresh Token
+  const refreshToken = jwt.sign({ userId }, process.env.REFRESH_JWT_SECRET!, {
+    expiresIn: "30d",
+  });
+  return { accessToken, refreshToken };
+};
+
 // Register User
 export const registerUser = async (req: Request, res: Response) => {
   try {
@@ -23,13 +39,23 @@ export const registerUser = async (req: Request, res: Response) => {
     const userObj = newUser.toObject();
     const { password: _, ...userWithoutPassword } = userObj;
 
-    const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET!, {
-      expiresIn: "7d",
+    const { accessToken, refreshToken } = generateTokens(
+      newUser._id.toString(),
+    );
+
+    // امنه Cookie في Refresh Token إرسال الـ
+    // (key, value, {...})
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true, // JS يمنع الوصول اليه عبر
+      // اثناء التطوير http لاننا نريد الموقع يشتغل علي false هناالقيمة بتساوي
+      secure: process.env.NODE_ENV === "development",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     res.status(201).json({
       message: "User created successfully",
-      token,
+      accessToken,
       user: userWithoutPassword,
     });
   } catch (error) {
@@ -76,13 +102,62 @@ export const loginUser = async (req: Request, res: Response) => {
 // Get User
 export const getUser = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.userId
-    const user = await UserModel.findById(userId).select('-password')
-    if(!user) return res.status(404).json({ message: "User not found" })
+    const userId = req.user.userId;
+    const user = await UserModel.findById(userId).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    res.status(200).json({user});
+    res.status(200).json({ user });
   } catch (error) {
     console.error("getUser error", error);
     res.status(500).json({ message: "Server Error" });
   }
+};
+
+// Refresh Controller
+export const refreshAccessToken = (req: Request, res: Response) => {
+  try {
+    // من الكوكيز refreshToken استخراج
+    const refreshToken = req.cookies.refreshToken;
+
+    // refreshToken التحقق من وجود
+    if (!refreshToken) {
+      return res.status(401).json({
+        message: "Refresh token not found",
+      });
+    }
+
+    // وفك تشفيرة Refresh Token التحقق من صحة
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.REFRESH_JWT_SECRET!,
+    ) as { userId: string };
+
+    // جديد Access Token اصدار
+    const accessToken = jwt.sign(
+      { userId: decoded.userId },
+      process.env.ACCESS_JWT_SECRET!,
+      { expiresIn: "15m" },
+    );
+
+    return res.status(200).json({
+      accessToken,
+    });
+  } catch (error) {
+    return res.status(403).json({
+      message: "Invalid or expired refresh token",
+    });
+  }
+};
+
+export const logoutUser = (req: Request, res: Response) => {
+  // refreshToken اللي اسمها Cookie امسح الـ
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+  });
+
+  return res.status(200).json({
+    message: "Logout successful",
+  });
 };
